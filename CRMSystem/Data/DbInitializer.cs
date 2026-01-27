@@ -1,6 +1,7 @@
 ﻿// File: Data/DbInitializer.cs
 
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 using CRMSystem.Models;
 
 namespace CRMSystem.Data
@@ -9,7 +10,8 @@ namespace CRMSystem.Data
     {
         public static async Task SeedAsync(
             UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole> roleManager)
+            RoleManager<IdentityRole> roleManager,
+            IConfiguration configuration)
         {
             // Seed roles
             string[] roleNames = { "Manager", "SalesRep" };
@@ -22,9 +24,9 @@ namespace CRMSystem.Data
                 }
             }
 
-            // Seed default Manager user
-            const string managerEmail = "admin@crmsystem.com";
-            const string managerPassword = "Admin@1234";
+            // Seed default Manager user from configuration
+            var managerEmail = configuration["SeedAdmin:Email"] ?? "admin@crmsystem.com";
+            var managerPassword = configuration["SeedAdmin:Password"] ?? "Admin@1234";
 
             var existingManager = await userManager.FindByEmailAsync(managerEmail);
 

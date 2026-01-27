@@ -1,48 +1,32 @@
-﻿@* File: Views/Notes/List.cshtml *@
+﻿@* File: Views/Admin/AllTasks.cshtml *@
 
 @model List<CRMSystem.Models.Note>
-@using CRMSystem.Models
 
 @{
-    ViewData["Title"] = ViewData["Title"] ?? "Notes";
-    var noteType = ViewData["NoteType"] as string;
-    var showCompleted = ViewData["ShowCompleted"] as bool? ?? false;
-    var currentUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+    var showCompleted = (bool)ViewBag.ShowCompleted;
+    var selectedSalesRepId = ViewBag.SelectedSalesRepId as string;
+    var totalCount = (int)ViewBag.TotalCount;
+    ViewData["Title"] = showCompleted ? "All Completed Tasks" : "All Open Tasks";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>@ViewData["Title"]</h1>
     <div>
-        @if (noteType == "Task")
+        @if (showCompleted)
         {
-            if (showCompleted)
-            {
-                <a asp-action="Tasks" class="btn btn-outline-primary">
-                    <i class="bi bi-list-task"></i> Open Tasks
-                </a>
-            }
-            else
-            {
-                <a asp-action="CompletedTasks" class="btn btn-outline-secondary">
-                    <i class="bi bi-check2-all"></i> Completed Tasks
-                </a>
-            }
+            <a asp-action="AllTasks" asp-route-salesRepId="@selectedSalesRepId" class="btn btn-outline-primary">
+                <i class="bi bi-list-task"></i> Open Tasks
+            </a>
         }
-        else if (noteType == "Meeting")
+        else
         {
-            if (showCompleted)
-            {
-                <a asp-action="Meetings" class="btn btn-outline-primary">
-                    <i class="bi bi-calendar-event"></i> Upcoming Meetings
-                </a>
-            }
-            else
-            {
-                <a asp-action="CompletedMeetings" class="btn btn-outline-secondary">
-                    <i class="bi bi-check2-all"></i> Completed Meetings
-                </a>
-            }
+            <a asp-action="AllTasks" asp-route-showCompleted="true" asp-route-salesRepId="@selectedSalesRepId" class="btn btn-outline-secondary">
+                <i class="bi bi-check2-all"></i> Completed Tasks
+            </a>
         }
+        <a asp-action="Dashboard" class="btn btn-outline-secondary ms-1">
+            <i class="bi bi-arrow-left"></i> Dashboard
+        </a>
     </div>
 </div>
 
@@ -62,27 +46,62 @@
     </div>
 }
 
+<!-- Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form asp-action="AllTasks" method="get" class="row g-3 align-items-end">
+            <input type="hidden" name="showCompleted" value="@showCompleted.ToString().ToLower()" />
+            <div class="col-md-5">
+                <label for="salesRepId" class="form-label">Filter by Sales Rep</label>
+                <select name="salesRepId" id="salesRepId" class="form-select"
+                        asp-items="@(ViewBag.Users as Microsoft.AspNetCore.Mvc.Rendering.SelectList)">
+                    <option value="">-- All Sales Reps --</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+                <a asp-action="AllTasks" asp-route-showCompleted="@showCompleted.ToString().ToLower()" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-lg"></i> Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(selectedSalesRepId))
+{
+    <div class="mb-3">
+        <span class="text-muted">Active filters:</span>
+        <span class="badge bg-primary ms-1">Sales Rep filtered</span>
+    </div>
+}
+
 @if (Model.Count == 0)
 {
     <div class="alert alert-info">
         @if (showCompleted)
         {
-            @($"No completed {noteType?.ToLower()}s found.")
+            @:No completed tasks found.
         }
         else
         {
-            @($"No open {noteType?.ToLower()}s found.")
+            @:No open tasks found.
         }
     </div>
 }
 else
 {
+    var currentUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+
     <div class="table-responsive">
         <table class="table table-striped table-hover align-middle">
             <thead class="table-dark">
                 <tr>
                     <th>Content</th>
                     <th>Contact</th>
+                    <th>Assigned To</th>
                     <th>Author</th>
                     <th>Due Date</th>
                     @if (showCompleted)
@@ -97,28 +116,29 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var note in Model)
+                @foreach (var task in Model)
                 {
-                    var isOverdue = !note.IsCompleted && note.DueDate.HasValue && note.DueDate.Value < DateTime.UtcNow;
+                    var isOverdue = !task.IsCompleted && task.DueDate.HasValue && task.DueDate.Value < DateTime.UtcNow;
 
                     <tr class="@(isOverdue ? "table-danger" : "")">
-                        <td style="max-width: 300px;">
-                            <span class="text-truncate d-inline-block" style="max-width: 300px;">
-                                @note.Content
+                        <td style="max-width: 280px;">
+                            <span class="text-truncate d-inline-block" style="max-width: 280px;">
+                                @task.Content
                             </span>
                         </td>
                         <td>
                             <a asp-controller="Contacts" asp-action="Details"
-                               asp-route-id="@note.ContactId" class="text-decoration-none">
-                                @note.Contact?.FullName
+                               asp-route-id="@task.ContactId" class="text-decoration-none">
+                                @task.Contact?.FullName
                             </a>
                         </td>
-                        <td>@note.Author?.FullName</td>
+                        <td>@task.Contact?.AssignedTo?.FullName</td>
+                        <td>@task.Author?.FullName</td>
                         <td>
-                            @if (note.DueDate.HasValue)
+                            @if (task.DueDate.HasValue)
                             {
                                 <span class="@(isOverdue ? "text-danger fw-bold" : "")">
-                                    @note.DueDate.Value.ToString("MMM dd, yyyy h:mm tt")
+                                    @task.DueDate.Value.ToString("MMM dd, yyyy h:mm tt")
                                 </span>
                                 @if (isOverdue)
                                 {
@@ -134,7 +154,7 @@ else
                         @if (showCompleted)
                         {
                             <td>
-                                @note.CompletedAt?.ToString("MMM dd, yyyy h:mm tt")
+                                @task.CompletedAt?.ToString("MMM dd, yyyy h:mm tt")
                             </td>
                         }
                         else
@@ -147,7 +167,7 @@ else
                             <div class="btn-group btn-group-sm" role="group">
                                 @if (!showCompleted)
                                 {
-                                    <form asp-action="MarkCompleted" asp-route-id="@note.NoteId" method="post" class="d-inline">
+                                    <form asp-controller="Notes" asp-action="MarkCompleted" asp-route-id="@task.NoteId" method="post" class="d-inline">
                                         <input type="hidden" name="returnUrl" value="@currentUrl" />
                                         <button type="submit" class="btn btn-outline-success" title="Mark completed">
                                             <i class="bi bi-check-lg"></i>
@@ -156,7 +176,7 @@ else
                                 }
                                 else
                                 {
-                                    <form asp-action="Reopen" asp-route-id="@note.NoteId" method="post" class="d-inline">
+                                    <form asp-controller="Notes" asp-action="Reopen" asp-route-id="@task.NoteId" method="post" class="d-inline">
                                         <input type="hidden" name="returnUrl" value="@currentUrl" />
                                         <button type="submit" class="btn btn-outline-warning" title="Reopen">
                                             <i class="bi bi-arrow-counterclockwise"></i>
@@ -164,12 +184,12 @@ else
                                     </form>
                                 }
                                 <a asp-controller="Contacts" asp-action="Details"
-                                   asp-route-id="@note.ContactId"
+                                   asp-route-id="@task.ContactId"
                                    class="btn btn-outline-primary" title="View contact">
                                     <i class="bi bi-eye"></i>
                                 </a>
-                                <form asp-action="Delete" asp-route-id="@note.NoteId" method="post" class="d-inline"
-                                      onsubmit="return confirm('Are you sure you want to delete this?');">
+                                <form asp-controller="Notes" asp-action="Delete" asp-route-id="@task.NoteId" method="post" class="d-inline"
+                                      onsubmit="return confirm('Are you sure you want to delete this task?');">
                                     <input type="hidden" name="returnUrl" value="@currentUrl" />
                                     <button type="submit" class="btn btn-outline-danger" title="Delete">
                                         <i class="bi bi-trash"></i>
@@ -183,6 +203,5 @@ else
         </table>
     </div>
 
-    <p class="text-muted">Showing @Model.Count @($"{noteType?.ToLower()}s")</p>
-
+    <p class="text-muted">Showing @totalCount task(s)</p>
 }

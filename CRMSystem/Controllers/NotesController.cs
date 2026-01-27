@@ -65,6 +65,14 @@ namespace CRMSystem.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(int contactId, string content, NoteType type, DateTime? dueDate)
         {
+            // Validate NoteType enum value
+            if (!Enum.IsDefined(typeof(NoteType), type))
+            {
+                return BadRequest("Invalid note type.");
+            }
+
+            content = content?.Trim() ?? string.Empty;
+
             if (string.IsNullOrWhiteSpace(content))
             {
                 TempData["ErrorMessage"] = "Content cannot be empty.";
@@ -283,6 +291,7 @@ namespace CRMSystem.Controllers
         private async Task<List<Note>> GetNotesByTypeAsync(NoteType type, bool completedFilter)
         {
             var query = _context.Notes
+                .AsNoTracking()
                 .Include(n => n.Contact)
                 .Include(n => n.Author)
                 .Where(n => n.Type == type && n.IsCompleted == completedFilter);

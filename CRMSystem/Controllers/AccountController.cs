@@ -121,7 +121,11 @@ namespace CRMSystem.Controllers
 
                 if (result.Succeeded)
                 {
-                    if (!string.IsNullOrEmpty(model.Role) && await _roleManager.RoleExistsAsync(model.Role))
+                    // Validate against allowed roles only
+                    var allowedRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Manager", "SalesRep" };
+                    if (!string.IsNullOrEmpty(model.Role)
+                        && allowedRoles.Contains(model.Role)
+                        && await _roleManager.RoleExistsAsync(model.Role))
                     {
                         await _userManager.AddToRoleAsync(user, model.Role);
                     }

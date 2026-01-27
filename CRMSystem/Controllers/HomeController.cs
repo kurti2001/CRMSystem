@@ -36,18 +36,19 @@ namespace CRMSystem.Controllers
                 contactsQuery = contactsQuery.Where(c => c.AssignedToId == userId);
             }
 
-            var leadCount = await contactsQuery
-                .CountAsync(c => c.ContactStatus!.Name == "Lead");
+            // Single query: counts grouped by status name
+            var contactCounts = await contactsQuery
+                .GroupBy(c => c.ContactStatus!.Name)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync();
 
-            var opportunityCount = await contactsQuery
-                .CountAsync(c => c.ContactStatus!.Name == "Opportunity");
-
-            var customerCount = await contactsQuery
-                .CountAsync(c => c.ContactStatus!.Name == "Customer");
-
-            var totalContacts = await contactsQuery.CountAsync();
+            var totalContacts = contactCounts.Sum(x => x.Count);
+            var leadCount = contactCounts.FirstOrDefault(x => x.Status == "Lead")?.Count ?? 0;
+            var opportunityCount = contactCounts.FirstOrDefault(x => x.Status == "Opportunity")?.Count ?? 0;
+            var customerCount = contactCounts.FirstOrDefault(x => x.Status == "Customer")?.Count ?? 0;
 
             var recentContacts = await contactsQuery
+                .AsNoTracking()
                 .Include(c => c.ContactStatus)
                 .Include(c => c.AssignedTo)
                 .OrderByDescending(c => c.UpdatedAt)
@@ -55,6 +56,7 @@ namespace CRMSystem.Controllers
                 .ToListAsync();
 
             IQueryable<Note> notesQuery = _context.Notes
+                .AsNoTracking()
                 .Include(n => n.Contact)
                 .Include(n => n.Author);
 

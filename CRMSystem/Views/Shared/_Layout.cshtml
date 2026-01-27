@@ -42,11 +42,14 @@
                 @if (User.Identity != null && User.Identity.IsAuthenticated)
                 {
                     <ul class="navbar-nav me-auto">
+                        <!-- Both Roles: Dashboard -->
                         <li class="nav-item">
                             <a class="nav-link" asp-controller="Home" asp-action="Index">
                                 <i class="bi bi-speedometer2"></i> Dashboard
                             </a>
                         </li>
+
+                        <!-- Both Roles: Contacts -->
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button"
                                data-bs-toggle="dropdown" aria-expanded="false">
@@ -76,6 +79,8 @@
                                 </li>
                             </ul>
                         </li>
+
+                        <!-- Both Roles: Tasks -->
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button"
                                data-bs-toggle="dropdown" aria-expanded="false">
@@ -94,6 +99,8 @@
                                 </li>
                             </ul>
                         </li>
+
+                        <!-- Both Roles: Meetings -->
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button"
                                data-bs-toggle="dropdown" aria-expanded="false">
@@ -112,16 +119,51 @@
                                 </li>
                             </ul>
                         </li>
+
+                        <!-- Manager Only: Manager Dashboard -->
                         @if (User.IsInRole("Manager"))
                         {
-                            <li class="nav-item">
-                                <a class="nav-link" asp-controller="Account" asp-action="Register">
-                                    <i class="bi bi-person-plus"></i> Register User
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button"
+                                   data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-clipboard-data"></i> Manager
                                 </a>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <a class="dropdown-item" asp-controller="Admin" asp-action="Dashboard">
+                                            <i class="bi bi-speedometer"></i> Dashboard
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" asp-controller="Admin" asp-action="Contacts">
+                                            <i class="bi bi-people-fill"></i> All Contacts
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" asp-controller="Admin" asp-action="AllTasks">
+                                            <i class="bi bi-list-check"></i> All Tasks
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li>
+                                        <h6 class="dropdown-header">Sales Team</h6>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" asp-controller="Admin" asp-action="Users">
+                                            <i class="bi bi-gear"></i> Manage Users
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" asp-controller="Account" asp-action="Register">
+                                            <i class="bi bi-person-plus"></i> Register User
+                                        </a>
+                                    </li>
+                                </ul>
                             </li>
                         }
                     </ul>
 
+                    <!-- Right Side: User Profile -->
                     <ul class="navbar-nav ms-auto">
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button"

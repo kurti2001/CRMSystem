@@ -59,6 +59,7 @@ namespace CRMSystem.Controllers
             }
 
             var contact = await _context.Contacts
+                .AsNoTracking()
                 .Include(c => c.ContactStatus)
                 .Include(c => c.AssignedTo)
                 .Include(c => c.Notes.OrderByDescending(n => n.CreatedAt))
@@ -98,6 +99,14 @@ namespace CRMSystem.Controllers
 
             if (ModelState.IsValid)
             {
+                // Trim string inputs
+                contact.FirstName = contact.FirstName?.Trim() ?? string.Empty;
+                contact.LastName = contact.LastName?.Trim() ?? string.Empty;
+                contact.Email = contact.Email?.Trim() ?? string.Empty;
+                contact.Phone = contact.Phone?.Trim();
+                contact.Company = contact.Company?.Trim();
+                contact.Address = contact.Address?.Trim();
+
                 contact.CreatedAt = DateTime.UtcNow;
                 contact.UpdatedAt = DateTime.UtcNow;
 
@@ -270,6 +279,7 @@ namespace CRMSystem.Controllers
         private async Task<List<Contact>> GetContactsByStatusAsync(string statusName)
         {
             var query = _context.Contacts
+                .AsNoTracking()
                 .Include(c => c.ContactStatus)
                 .Include(c => c.AssignedTo)
                 .Where(c => c.ContactStatus!.Name == statusName);
@@ -292,7 +302,7 @@ namespace CRMSystem.Controllers
                 return false;
             }
 
-            return await _context.Users.AnyAsync(u => u.Id == userId);
+            return await _context.Users.AnyAsync(u => u.Id == userId && u.IsActive);
         }
 
         private async Task<bool> ContactExistsAsync(int id)

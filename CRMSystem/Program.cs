@@ -83,7 +83,8 @@ namespace CRMSystem
                     var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
                     await context.Database.MigrateAsync();
-                    await Data.DbInitializer.SeedAsync(userManager, roleManager);
+                    var configuration = services.GetRequiredService<IConfiguration>();
+                    await Data.DbInitializer.SeedAsync(userManager, roleManager, configuration);
                 }
                 catch (Exception ex)
                 {
