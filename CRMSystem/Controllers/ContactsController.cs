@@ -1,5 +1,3 @@
-﻿// File: Controllers/ContactsController.cs
-
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -26,27 +24,30 @@ namespace CRMSystem.Controllers
         // GET: Contacts/Leads
         public async Task<IActionResult> Leads()
         {
-            var contacts = await GetContactsByStatusAsync("Lead");
-            ViewData["Title"] = "Leads";
+            var contacts = await GetContactsByStatusAsync("lead");
+            ViewData["Title"] = "My Leads";
             ViewData["StatusName"] = "Lead";
+            ViewData["StatusId"] = 1;
             return View("Index", contacts);
         }
 
-        // GET: Contacts/Opportunities
+        // GET: Contacts/Opportunities (Proposal stage)
         public async Task<IActionResult> Opportunities()
         {
-            var contacts = await GetContactsByStatusAsync("Opportunity");
-            ViewData["Title"] = "Opportunities";
+            var contacts = await GetContactsByStatusAsync("proposal");
+            ViewData["Title"] = "My Opportunities";
             ViewData["StatusName"] = "Opportunity";
+            ViewData["StatusId"] = 2;
             return View("Index", contacts);
         }
 
         // GET: Contacts/Customers
         public async Task<IActionResult> Customers()
         {
-            var contacts = await GetContactsByStatusAsync("Customer");
-            ViewData["Title"] = "Customers";
-            ViewData["StatusName"] = "Customer";
+            var contacts = await GetContactsByStatusAsync("customer/won");
+            ViewData["Title"] = "My Customers/Won";
+            ViewData["StatusName"] = "Customer/Won";
+            ViewData["StatusId"] = 3;
             return View("Index", contacts);
         }
 
@@ -61,9 +62,15 @@ namespace CRMSystem.Controllers
             var contact = await _context.Contacts
                 .AsNoTracking()
                 .Include(c => c.ContactStatus)
-                .Include(c => c.AssignedTo)
-                .Include(c => c.Notes.OrderByDescending(n => n.CreatedAt))
-                    .ThenInclude(n => n.Author)
+                .Include(c => c.SalesRep)
+                .Include(c => c.Notes.OrderByDescending(n => n.Date))
+                    .ThenInclude(n => n.SalesRep)
+                .Include(c => c.Notes)
+                    .ThenInclude(n => n.TodoType)
+                .Include(c => c.Notes)
+                    .ThenInclude(n => n.TodoDesc)
+                .Include(c => c.Notes)
+                    .ThenInclude(n => n.TaskStatus)
                 .FirstOrDefaultAsync(c => c.ContactId == id);
 
             if (contact == null)
@@ -75,6 +82,9 @@ namespace CRMSystem.Controllers
             {
                 return Forbid();
             }
+
+            // Load dropdowns for adding notes
+            await PopulateNoteDropdownsAsync();
 
             return View(contact);
         }
@@ -89,30 +99,32 @@ namespace CRMSystem.Controllers
         // POST: Contacts/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(
-            [Bind("FirstName,LastName,Email,Phone,Company,Address,ContactStatusId,AssignedToId")] Contact contact)
+        public async Task<IActionResult> Create([Bind("ContactTitle,FirstName,MiddleName,LastName,Email,Phone,Company,Industry,Address,AddressStreet1,AddressStreet2,AddressCity,AddressState,AddressZip,AddressCountry,Title,Website,LinkedInProfile,BackgroundInfo,LeadReferralSource,DateOfInitialContact,ContactStatusId,SalesRepId,Rating,ProjectType,ProjectDescription,ProposalDueDate,Budget,Deliverables")] Contact contact)
         {
-            if (!await IsValidAssignmentAsync(contact.AssignedToId))
+            if (!await IsValidAssignmentAsync(contact.SalesRepId))
             {
-                ModelState.AddModelError("AssignedToId", "Invalid user assignment.");
+                ModelState.AddModelError("SalesRepId", "Invalid user assignment.");
             }
 
             if (ModelState.IsValid)
             {
-                // Trim string inputs
                 contact.FirstName = contact.FirstName?.Trim() ?? string.Empty;
                 contact.LastName = contact.LastName?.Trim() ?? string.Empty;
                 contact.Email = contact.Email?.Trim() ?? string.Empty;
                 contact.Phone = contact.Phone?.Trim();
                 contact.Company = contact.Company?.Trim();
-                contact.Address = contact.Address?.Trim();
 
                 contact.CreatedAt = DateTime.UtcNow;
                 contact.UpdatedAt = DateTime.UtcNow;
 
+                if (contact.DateOfInitialContact == null)
+                {
+                    contact.DateOfInitialContact = DateTime.UtcNow;
+                }
+
                 if (!User.IsInRole("Manager"))
                 {
-                    contact.AssignedToId = GetCurrentUserId();
+                    contact.SalesRepId = GetCurrentUserId();
                 }
 
                 _context.Contacts.Add(contact);
@@ -155,8 +167,7 @@ namespace CRMSystem.Controllers
         // POST: Contacts/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id,
-            [Bind("ContactId,FirstName,LastName,Email,Phone,Company,Address,ContactStatusId,AssignedToId")] Contact contact)
+        public async Task<IActionResult> Edit(int id, [Bind("ContactId,ContactTitle,FirstName,MiddleName,LastName,Email,Phone,Company,Industry,Address,AddressStreet1,AddressStreet2,AddressCity,AddressState,AddressZip,AddressCountry,Title,Website,LinkedInProfile,BackgroundInfo,LeadReferralSource,DateOfInitialContact,ContactStatusId,SalesRepId,Rating,ProjectType,ProjectDescription,ProposalDueDate,Budget,Deliverables")] Contact contact)
         {
             if (id != contact.ContactId)
             {
@@ -177,9 +188,9 @@ namespace CRMSystem.Controllers
                 return Forbid();
             }
 
-            if (!await IsValidAssignmentAsync(contact.AssignedToId))
+            if (!await IsValidAssignmentAsync(contact.SalesRepId))
             {
-                ModelState.AddModelError("AssignedToId", "Invalid user assignment.");
+                ModelState.AddModelError("SalesRepId", "Invalid user assignment.");
             }
 
             if (ModelState.IsValid)
@@ -191,7 +202,7 @@ namespace CRMSystem.Controllers
 
                     if (!User.IsInRole("Manager"))
                     {
-                        contact.AssignedToId = existingContact.AssignedToId;
+                        contact.SalesRepId = existingContact.SalesRepId;
                     }
 
                     _context.Update(contact);
@@ -273,7 +284,7 @@ namespace CRMSystem.Controllers
                 return true;
             }
 
-            return contact.AssignedToId == GetCurrentUserId();
+            return contact.SalesRepId == GetCurrentUserId();
         }
 
         private async Task<List<Contact>> GetContactsByStatusAsync(string statusName)
@@ -281,13 +292,19 @@ namespace CRMSystem.Controllers
             var query = _context.Contacts
                 .AsNoTracking()
                 .Include(c => c.ContactStatus)
-                .Include(c => c.AssignedTo)
+                .Include(c => c.SalesRep)
+                .Include(c => c.Notes.OrderByDescending(n => n.Date))
+                    .ThenInclude(n => n.TodoType)
+                .Include(c => c.Notes)
+                    .ThenInclude(n => n.TodoDesc)
+                .Include(c => c.Notes)
+                    .ThenInclude(n => n.TaskStatus)
                 .Where(c => c.ContactStatus!.Name == statusName);
 
             if (!await IsManagerAsync())
             {
                 var userId = GetCurrentUserId();
-                query = query.Where(c => c.AssignedToId == userId);
+                query = query.Where(c => c.SalesRepId == userId);
             }
 
             return await query
@@ -313,7 +330,7 @@ namespace CRMSystem.Controllers
         private async Task PopulateDropdownsAsync()
         {
             ViewBag.ContactStatuses = new SelectList(
-                await _context.ContactStatuses.OrderBy(cs => cs.Name).ToListAsync(),
+                await _context.ContactStatuses.OrderBy(cs => cs.ContactStatusId).ToListAsync(),
                 "ContactStatusId",
                 "Name"
             );
@@ -343,6 +360,27 @@ namespace CRMSystem.Controllers
                     "Name"
                 );
             }
+        }
+
+        private async Task PopulateNoteDropdownsAsync()
+        {
+            ViewBag.TodoTypes = new SelectList(
+                await _context.TodoTypes.OrderBy(tt => tt.Id).ToListAsync(),
+                "Id",
+                "Type"
+            );
+
+            ViewBag.TodoDescs = new SelectList(
+                await _context.TodoDescs.OrderBy(td => td.Id).ToListAsync(),
+                "Id",
+                "Description"
+            );
+
+            ViewBag.TaskStatuses = new SelectList(
+                await _context.TaskStatuses.OrderBy(ts => ts.Id).ToListAsync(),
+                "Id",
+                "Status"
+            );
         }
 
         private IActionResult RedirectToStatusAction(int statusId)

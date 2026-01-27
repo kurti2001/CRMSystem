@@ -1,5 +1,3 @@
-// File: Controllers/HomeController.cs
-
 using System.Diagnostics;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
@@ -23,62 +21,21 @@ namespace CRMSystem.Controllers
             _userManager = userManager;
         }
 
-        // GET: Home/Index (Dashboard)
+        // GET: Home/Index - Redirect to appropriate default page based on role
         public async Task<IActionResult> Index()
         {
-            var userId = GetCurrentUserId();
             var isManager = await IsManagerAsync();
 
-            IQueryable<Contact> contactsQuery = _context.Contacts;
-
-            if (!isManager)
+            if (isManager)
             {
-                contactsQuery = contactsQuery.Where(c => c.AssignedToId == userId);
+                // Managers go to My Sales Reps view
+                return RedirectToAction("MySalesReps", "Admin");
             }
-
-            // Single query: counts grouped by status name
-            var contactCounts = await contactsQuery
-                .GroupBy(c => c.ContactStatus!.Name)
-                .Select(g => new { Status = g.Key, Count = g.Count() })
-                .ToListAsync();
-
-            var totalContacts = contactCounts.Sum(x => x.Count);
-            var leadCount = contactCounts.FirstOrDefault(x => x.Status == "Lead")?.Count ?? 0;
-            var opportunityCount = contactCounts.FirstOrDefault(x => x.Status == "Opportunity")?.Count ?? 0;
-            var customerCount = contactCounts.FirstOrDefault(x => x.Status == "Customer")?.Count ?? 0;
-
-            var recentContacts = await contactsQuery
-                .AsNoTracking()
-                .Include(c => c.ContactStatus)
-                .Include(c => c.AssignedTo)
-                .OrderByDescending(c => c.UpdatedAt)
-                .Take(5)
-                .ToListAsync();
-
-            IQueryable<Note> notesQuery = _context.Notes
-                .AsNoTracking()
-                .Include(n => n.Contact)
-                .Include(n => n.Author);
-
-            if (!isManager)
+            else
             {
-                notesQuery = notesQuery.Where(n => n.Contact!.AssignedToId == userId);
+                // Sales Reps go to Tasks view
+                return RedirectToAction("Tasks", "Notes");
             }
-
-            var recentNotes = await notesQuery
-                .OrderByDescending(n => n.CreatedAt)
-                .Take(5)
-                .ToListAsync();
-
-            ViewBag.LeadCount = leadCount;
-            ViewBag.OpportunityCount = opportunityCount;
-            ViewBag.CustomerCount = customerCount;
-            ViewBag.TotalContacts = totalContacts;
-            ViewBag.RecentContacts = recentContacts;
-            ViewBag.RecentNotes = recentNotes;
-            ViewBag.IsManager = isManager;
-
-            return View();
         }
 
         [AllowAnonymous]

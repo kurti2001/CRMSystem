@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(del \"C:\\\\Users\\\\User\\\\.claude-worktrees\\\\CRMSystem\\\\lucid-lumiere\\\\CRMSystem\\\\Views\\\\Notes\\\\List.cshtml\")",
+      "Bash(del \"C:\\\\Users\\\\User\\\\.claude-worktrees\\\\CRMSystem\\\\lucid-lumiere\\\\CRMSystem\\\\Views\\\\Admin\\\\Dashboard.cshtml\")",
+      "Bash(del \"C:\\\\Users\\\\User\\\\.claude-worktrees\\\\CRMSystem\\\\lucid-lumiere\\\\CRMSystem\\\\Views\\\\Admin\\\\AllTasks.cshtml\")",
+      "Bash(dotnet ef database update:*)"
+    ]
+  }
+}

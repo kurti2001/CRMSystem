@@ -1,0 +1,125 @@
+@model List<CRMSystem.Models.Note>
+
+@{
+    ViewData["Title"] = "All Tasks";
+    var showCompleted = ViewBag.ShowCompleted as bool? ?? false;
+    var selectedSalesRepId = ViewBag.SelectedSalesRepId as string;
+}
+
+<h1 class="mb-4">All Tasks</h1>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Sales Rep</label>
+                <select name="salesRepId" class="form-select">
+                    <option value="">All Sales Reps</option>
+                    @foreach (var item in (ViewBag.Users as SelectList)!)
+                    {
+                        <option value="@item.Value" selected="@(item.Value == selectedSalesRepId)">@item.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Status</label>
+                <select name="showCompleted" class="form-select">
+                    <option value="false" selected="@(!showCompleted)">Pending</option>
+                    <option value="true" selected="@showCompleted">Completed</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-filter"></i> Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">
+        No @(showCompleted ? "completed" : "pending") tasks found.
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Tasks (@ViewBag.TotalCount)</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-info">
+                        <tr>
+                            <th>Date</th>
+                            <th>Notes</th>
+                            <th>Is_New_Todo</th>
+                            <th>Todo_Type_ID</th>
+                            <th>Todo_Desc_ID</th>
+                            <th>Todo_Due_Date</th>
+                            <th>Task_Status</th>
+                            <th>Task_Update</th>
+                            <th>Contact</th>
+                            <th>Sales Rep</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var note in Model)
+                        {
+                            var isOverdue = note.TodoDueDate.HasValue && note.TodoDueDate < DateTime.UtcNow && note.TaskStatusId == 1;
+                            <tr class="@(isOverdue ? "table-danger" : "")">
+                                <td>@note.Date.ToString("yyyy-MM-dd")</td>
+                                <td>@note.Content</td>
+                                <td>@(note.IsNewTodo ? "Yes" : "No")</td>
+                                <td>@(note.TodoType?.Type ?? "-")</td>
+                                <td>@(note.TodoDesc?.Description ?? "-")</td>
+                                <td>
+                                    @if (note.TodoDueDate.HasValue)
+                                    {
+                                        <span class="@(isOverdue ? "text-danger fw-bold" : "")">
+                                            @note.TodoDueDate?.ToString("MM/dd/yyyy h:mmtt")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge @(note.TaskStatusId == 2 ? "bg-success" : "bg-warning text-dark")">
+                                        @(note.TaskStatus?.Status ?? "-")
+                                    </span>
+                                </td>
+                                <td>@(note.TaskUpdate ?? "-")</td>
+                                <td>
+                                    @if (note.Contact != null)
+                                    {
+                                        <a asp-controller="Contacts" asp-action="Details" asp-route-id="@note.ContactId">
+                                            @note.Contact.FullName
+                                        </a>
+                                    }
+                                </td>
+                                <td>@(note.Contact?.SalesRep?.FullName ?? "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <span>Page 1 of 1</span>
+            <span>View 1 - @Model.Count of @Model.Count</span>
+        </div>
+    </div>
+}

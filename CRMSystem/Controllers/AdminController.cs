@@ -1,5 +1,3 @@
-﻿// File: Controllers/AdminController.cs
-
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -23,109 +21,116 @@ namespace CRMSystem.Controllers
             _userManager = userManager;
         }
 
-        // GET: Admin/Dashboard
-        public async Task<IActionResult> Dashboard()
+        // GET: Admin/MySalesReps - Main Manager view showing sales reps with their contacts
+        public async Task<IActionResult> MySalesReps()
         {
-            // Single query: contact counts grouped by status
-            var contactCounts = await _context.Contacts
-                .GroupBy(c => c.ContactStatus!.Name)
-                .Select(g => new { Status = g.Key, Count = g.Count() })
-                .ToListAsync();
-
-            var totalContacts = contactCounts.Sum(x => x.Count);
-            var leadCount = contactCounts.FirstOrDefault(x => x.Status == "Lead")?.Count ?? 0;
-            var opportunityCount = contactCounts.FirstOrDefault(x => x.Status == "Opportunity")?.Count ?? 0;
-            var customerCount = contactCounts.FirstOrDefault(x => x.Status == "Customer")?.Count ?? 0;
-
-            // Single query: note counts grouped by type and overdue status
-            var now = DateTime.UtcNow;
-            var noteCounts = await _context.Notes
-                .Where(n => !n.IsCompleted && (n.Type == NoteType.Task || n.Type == NoteType.Meeting))
-                .GroupBy(n => new { n.Type, IsOverdue = n.DueDate < now })
-                .Select(g => new { g.Key.Type, g.Key.IsOverdue, Count = g.Count() })
-                .ToListAsync();
-
-            var openTasks = noteCounts.Where(x => x.Type == NoteType.Task).Sum(x => x.Count);
-            var openMeetings = noteCounts.Where(x => x.Type == NoteType.Meeting).Sum(x => x.Count);
-            var overdueTasks = noteCounts.Where(x => x.Type == NoteType.Task && x.IsOverdue).Sum(x => x.Count);
-            var overdueMeetings = noteCounts.Where(x => x.Type == NoteType.Meeting && x.IsOverdue).Sum(x => x.Count);
-
-            // Single query: user counts
-            var userCounts = await _userManager.Users
-                .GroupBy(u => u.IsActive)
-                .Select(g => new { IsActive = g.Key, Count = g.Count() })
-                .ToListAsync();
-
-            var totalUsers = userCounts.Sum(x => x.Count);
-            var activeUsers = userCounts.FirstOrDefault(x => x.IsActive)?.Count ?? 0;
-
-            // Batch query: contact counts per user
-            var contactCountsByUser = await _context.Contacts
-                .GroupBy(c => c.AssignedToId)
-                .Select(g => new { UserId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.UserId, x => x.Count);
-
-            // Batch query: open task/meeting counts per user
-            var noteCountsByUser = await _context.Notes
-                .Where(n => !n.IsCompleted && (n.Type == NoteType.Task || n.Type == NoteType.Meeting))
-                .GroupBy(n => new { UserId = n.Contact!.AssignedToId, n.Type })
-                .Select(g => new { g.Key.UserId, g.Key.Type, Count = g.Count() })
-                .ToListAsync();
-
-            // Get active users with their roles via join on UserRoles
             var salesReps = await _userManager.Users
                 .Where(u => u.IsActive)
                 .OrderBy(u => u.FirstName)
                 .ThenBy(u => u.LastName)
                 .ToListAsync();
 
-            var repStats = new List<SalesRepStat>();
+            var repStats = new List<SalesRepWithContacts>();
             foreach (var rep in salesReps)
             {
                 var roles = await _userManager.GetRolesAsync(rep);
-                repStats.Add(new SalesRepStat
+                if (roles.Contains("SalesRep"))
                 {
-                    UserId = rep.Id,
-                    FullName = rep.FullName,
-                    Email = rep.Email!,
-                    Role = roles.FirstOrDefault() ?? "None",
-                    ContactCount = contactCountsByUser.GetValueOrDefault(rep.Id, 0),
-                    OpenTaskCount = noteCountsByUser
-                        .Where(x => x.UserId == rep.Id && x.Type == NoteType.Task)
-                        .Sum(x => x.Count),
-                    OpenMeetingCount = noteCountsByUser
-                        .Where(x => x.UserId == rep.Id && x.Type == NoteType.Meeting)
-                        .Sum(x => x.Count)
-                });
+                    var contacts = await _context.Contacts
+                        .AsNoTracking()
+                        .Include(c => c.ContactStatus)
+                        .Include(c => c.Notes.OrderByDescending(n => n.Date))
+                            .ThenInclude(n => n.TodoType)
+                        .Include(c => c.Notes)
+                            .ThenInclude(n => n.TodoDesc)
+                        .Include(c => c.Notes)
+                            .ThenInclude(n => n.TaskStatus)
+                        .Where(c => c.SalesRepId == rep.Id)
+                        .OrderByDescending(c => c.UpdatedAt)
+                        .ToListAsync();
+
+                    repStats.Add(new SalesRepWithContacts
+                    {
+                        UserId = rep.Id,
+                        FullName = rep.FullName,
+                        Email = rep.Email!,
+                        Contacts = contacts
+                    });
+                }
             }
 
-            ViewBag.TotalContacts = totalContacts;
-            ViewBag.LeadCount = leadCount;
-            ViewBag.OpportunityCount = opportunityCount;
-            ViewBag.CustomerCount = customerCount;
-            ViewBag.OpenTasks = openTasks;
-            ViewBag.OpenMeetings = openMeetings;
-            ViewBag.OverdueTasks = overdueTasks;
-            ViewBag.OverdueMeetings = overdueMeetings;
-            ViewBag.TotalUsers = totalUsers;
-            ViewBag.ActiveUsers = activeUsers;
-            ViewBag.RepStats = repStats;
-
-            return View();
+            return View(repStats);
         }
 
-        // GET: Admin/Contacts?salesRepId=xxx
+        // GET: Admin/Tasks - All tasks view for managers
+        public async Task<IActionResult> Tasks(string? salesRepId, bool showCompleted = false)
+        {
+            var query = _context.Notes
+                .AsNoTracking()
+                .Include(n => n.Contact)
+                    .ThenInclude(c => c!.SalesRep)
+                .Include(n => n.SalesRep)
+                .Include(n => n.TodoType)
+                .Include(n => n.TodoDesc)
+                .Include(n => n.TaskStatus)
+                .Where(n => n.IsNewTodo);
+
+            if (!string.IsNullOrEmpty(salesRepId))
+            {
+                query = query.Where(n => n.Contact!.SalesRepId == salesRepId);
+            }
+
+            if (showCompleted)
+            {
+                query = query.Where(n => n.TaskStatusId == 2); // Completed
+            }
+            else
+            {
+                query = query.Where(n => n.TaskStatusId == 1); // Pending
+            }
+
+            var tasks = await query
+                .OrderBy(n => n.TodoDueDate)
+                .ToListAsync();
+
+            var users = await _userManager.Users
+                .Where(u => u.IsActive)
+                .OrderBy(u => u.FirstName)
+                .ThenBy(u => u.LastName)
+                .ToListAsync();
+
+            ViewBag.Users = new SelectList(
+                users.Select(u => new { u.Id, Name = u.FullName }),
+                "Id",
+                "Name",
+                salesRepId
+            );
+
+            ViewBag.SelectedSalesRepId = salesRepId;
+            ViewBag.ShowCompleted = showCompleted;
+            ViewBag.TotalCount = tasks.Count;
+
+            return View(tasks);
+        }
+
+        // GET: Admin/Contacts - All contacts view for managers
         public async Task<IActionResult> Contacts(string? salesRepId, string? status)
         {
             var query = _context.Contacts
                 .AsNoTracking()
                 .Include(c => c.ContactStatus)
-                .Include(c => c.AssignedTo)
+                .Include(c => c.SalesRep)
+                .Include(c => c.Notes.OrderByDescending(n => n.Date))
+                    .ThenInclude(n => n.TodoType)
+                .Include(c => c.Notes)
+                    .ThenInclude(n => n.TodoDesc)
+                .Include(c => c.Notes)
+                    .ThenInclude(n => n.TaskStatus)
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(salesRepId))
             {
-                query = query.Where(c => c.AssignedToId == salesRepId);
+                query = query.Where(c => c.SalesRepId == salesRepId);
             }
 
             if (!string.IsNullOrEmpty(status))
@@ -151,7 +156,7 @@ namespace CRMSystem.Controllers
             );
 
             ViewBag.Statuses = new SelectList(
-                await _context.ContactStatuses.OrderBy(cs => cs.Name).ToListAsync(),
+                await _context.ContactStatuses.OrderBy(cs => cs.ContactStatusId).ToListAsync(),
                 "Name",
                 "Name",
                 status
@@ -164,57 +169,11 @@ namespace CRMSystem.Controllers
             return View(contacts);
         }
 
-        // GET: Admin/AllTasks?salesRepId=xxx
-        public async Task<IActionResult> AllTasks(string? salesRepId, bool showCompleted = false)
-        {
-            var query = _context.Notes
-                .AsNoTracking()
-                .Include(n => n.Contact)
-                .Include(n => n.Author)
-                .Where(n => n.Type == NoteType.Task && n.IsCompleted == showCompleted);
-
-            if (!string.IsNullOrEmpty(salesRepId))
-            {
-                query = query.Where(n => n.Contact!.AssignedToId == salesRepId);
-            }
-
-            if (showCompleted)
-            {
-                query = query.OrderByDescending(n => n.CompletedAt);
-            }
-            else
-            {
-                query = query.OrderBy(n => n.DueDate);
-            }
-
-            var tasks = await query.ToListAsync();
-
-            var users = await _userManager.Users
-                .Where(u => u.IsActive)
-                .OrderBy(u => u.FirstName)
-                .ThenBy(u => u.LastName)
-                .ToListAsync();
-
-            ViewBag.Users = new SelectList(
-                users.Select(u => new { u.Id, Name = u.FullName }),
-                "Id",
-                "Name",
-                salesRepId
-            );
-
-            ViewBag.SelectedSalesRepId = salesRepId;
-            ViewBag.ShowCompleted = showCompleted;
-            ViewBag.TotalCount = tasks.Count;
-
-            return View(tasks);
-        }
-
         // GET: Admin/Users
         public async Task<IActionResult> Users()
         {
-            // Batch query: contact counts per user (avoids N+1)
             var contactCountsByUser = await _context.Contacts
-                .GroupBy(c => c.AssignedToId)
+                .GroupBy(c => c.SalesRepId)
                 .Select(g => new { UserId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.UserId, x => x.Count);
 
@@ -287,7 +246,6 @@ namespace CRMSystem.Controllers
                 return BadRequest();
             }
 
-            // Validate role against allowed roles only
             var allowedRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Manager", "SalesRep" };
             if (!allowedRoles.Contains(newRole))
             {
@@ -324,15 +282,12 @@ namespace CRMSystem.Controllers
     // View Models
     // =====================
 
-    public class SalesRepStat
+    public class SalesRepWithContacts
     {
         public string UserId { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
-        public string Role { get; set; } = string.Empty;
-        public int ContactCount { get; set; }
-        public int OpenTaskCount { get; set; }
-        public int OpenMeetingCount { get; set; }
+        public List<Contact> Contacts { get; set; } = new List<Contact>();
     }
 
     public class UserViewModel

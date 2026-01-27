@@ -1,0 +1,149 @@
+@model List<CRMSystem.Models.Note>
+
+@{
+    ViewData["Title"] = ViewData["Title"] ?? "Tasks";
+    var showPending = ViewData["ShowPending"] as bool? ?? true;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>@ViewData["Title"]</h1>
+    <div>
+        @if (showPending)
+        {
+            <a asp-action="CompletedTasks" class="btn btn-outline-secondary">
+                <i class="bi bi-check2-all"></i> View Completed
+            </a>
+        }
+        else
+        {
+            <a asp-action="Tasks" class="btn btn-outline-primary">
+                <i class="bi bi-clock"></i> View Pending
+            </a>
+        }
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">
+        No @(showPending ? "pending" : "completed") tasks found.
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Tasks</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-info">
+                        <tr>
+                            <th>Date</th>
+                            <th>Notes</th>
+                            <th>Is_New_Todo</th>
+                            <th>Todo_Type_ID</th>
+                            <th>Todo_Desc_ID</th>
+                            <th>Todo_Due_Date</th>
+                            <th>Task_Status</th>
+                            <th>Task_Update</th>
+                            <th>Contact</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var note in Model)
+                        {
+                            var isOverdue = note.TodoDueDate.HasValue && note.TodoDueDate < DateTime.UtcNow && note.TaskStatusId == 1;
+                            <tr class="@(isOverdue ? "table-danger" : "")">
+                                <td>@note.Date.ToString("yyyy-MM-dd")</td>
+                                <td>@note.Content</td>
+                                <td>@(note.IsNewTodo ? "Yes" : "No")</td>
+                                <td>@(note.TodoType?.Type ?? "-")</td>
+                                <td>@(note.TodoDesc?.Description ?? "-")</td>
+                                <td>
+                                    @if (note.TodoDueDate.HasValue)
+                                    {
+                                        <span class="@(isOverdue ? "text-danger fw-bold" : "")">
+                                            @note.TodoDueDate?.ToString("MM/dd/yyyy h:mmtt")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge @(note.TaskStatusId == 2 ? "bg-success" : "bg-warning text-dark")">
+                                        @(note.TaskStatus?.Status ?? "-")
+                                    </span>
+                                </td>
+                                <td>@(note.TaskUpdate ?? "-")</td>
+                                <td>
+                                    @if (note.Contact != null)
+                                    {
+                                        <a asp-controller="Contacts" asp-action="Details" asp-route-id="@note.ContactId">
+                                            @note.Contact.FullName
+                                        </a>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        @if (note.TaskStatusId == 1)
+                                        {
+                                            <form asp-action="MarkCompleted" method="post" class="d-inline">
+                                                <input type="hidden" name="id" value="@note.NoteId" />
+                                                <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                                <button type="submit" class="btn btn-success btn-sm" title="Mark Complete">
+                                                    <i class="bi bi-check-lg"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <form asp-action="Reopen" method="post" class="d-inline">
+                                                <input type="hidden" name="id" value="@note.NoteId" />
+                                                <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                                <button type="submit" class="btn btn-warning btn-sm" title="Reopen">
+                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                        <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this task?');">
+                                            <input type="hidden" name="id" value="@note.NoteId" />
+                                            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                            <button type="submit" class="btn btn-danger btn-sm" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <span>Page 1 of 1</span>
+            <span>View 1 - @Model.Count of @Model.Count</span>
+        </div>
+    </div>
+}

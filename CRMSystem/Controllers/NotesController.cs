@@ -1,9 +1,8 @@
-﻿// File: Controllers/NotesController.cs
-
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using CRMSystem.Data;
 using CRMSystem.Models;
@@ -22,72 +21,41 @@ namespace CRMSystem.Controllers
             _userManager = userManager;
         }
 
-        // GET: Notes/Tasks
+        // GET: Notes/Tasks - Shows pending tasks for the current sales rep
         public async Task<IActionResult> Tasks()
         {
-            var notes = await GetNotesByTypeAsync(NoteType.Task, completedFilter: false);
-            ViewData["Title"] = "Open Tasks";
-            ViewData["NoteType"] = "Task";
-            return View("List", notes);
-        }
-
-        // GET: Notes/Meetings
-        public async Task<IActionResult> Meetings()
-        {
-            var notes = await GetNotesByTypeAsync(NoteType.Meeting, completedFilter: false);
-            ViewData["Title"] = "Upcoming Meetings";
-            ViewData["NoteType"] = "Meeting";
-            return View("List", notes);
+            var notes = await GetTasksAsync(pendingOnly: true);
+            ViewData["Title"] = "My Tasks";
+            ViewData["ShowPending"] = true;
+            await PopulateDropdownsAsync();
+            return View("Tasks", notes);
         }
 
         // GET: Notes/CompletedTasks
         public async Task<IActionResult> CompletedTasks()
         {
-            var notes = await GetNotesByTypeAsync(NoteType.Task, completedFilter: true);
+            var notes = await GetTasksAsync(pendingOnly: false);
             ViewData["Title"] = "Completed Tasks";
-            ViewData["NoteType"] = "Task";
-            ViewData["ShowCompleted"] = true;
-            return View("List", notes);
-        }
-
-        // GET: Notes/CompletedMeetings
-        public async Task<IActionResult> CompletedMeetings()
-        {
-            var notes = await GetNotesByTypeAsync(NoteType.Meeting, completedFilter: true);
-            ViewData["Title"] = "Completed Meetings";
-            ViewData["NoteType"] = "Meeting";
-            ViewData["ShowCompleted"] = true;
-            return View("List", notes);
+            ViewData["ShowPending"] = false;
+            return View("Tasks", notes);
         }
 
         // POST: Notes/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(int contactId, string content, NoteType type, DateTime? dueDate)
+        public async Task<IActionResult> Create(int contactId, string content, bool isNewTodo, int? todoTypeId, int? todoDescId, DateTime? todoDueDate, string? taskUpdate)
         {
-            // Validate NoteType enum value
-            if (!Enum.IsDefined(typeof(NoteType), type))
-            {
-                return BadRequest("Invalid note type.");
-            }
-
             content = content?.Trim() ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(content))
             {
-                TempData["ErrorMessage"] = "Content cannot be empty.";
+                TempData["ErrorMessage"] = "Notes content cannot be empty.";
                 return RedirectToAction("Details", "Contacts", new { id = contactId });
             }
 
             if (content.Length > 4000)
             {
                 TempData["ErrorMessage"] = "Content cannot exceed 4000 characters.";
-                return RedirectToAction("Details", "Contacts", new { id = contactId });
-            }
-
-            if ((type == NoteType.Task || type == NoteType.Meeting) && dueDate == null)
-            {
-                TempData["ErrorMessage"] = $"Due date is required for a {type}.";
                 return RedirectToAction("Details", "Contacts", new { id = contactId });
             }
 
@@ -107,26 +75,29 @@ namespace CRMSystem.Controllers
             var note = new Note
             {
                 Content = content,
-                Type = type,
-                DueDate = dueDate,
-                IsCompleted = false,
+                Date = DateTime.UtcNow,
+                IsNewTodo = isNewTodo,
+                TodoTypeId = isNewTodo ? todoTypeId : null,
+                TodoDescId = isNewTodo ? todoDescId : null,
+                TodoDueDate = isNewTodo ? todoDueDate : null,
+                TaskStatusId = isNewTodo ? 1 : null, // Pending by default
+                TaskUpdate = taskUpdate?.Trim(),
                 ContactId = contactId,
-                AuthorId = GetCurrentUserId(),
+                SalesRepId = GetCurrentUserId(),
                 CreatedAt = DateTime.UtcNow
             };
 
             _context.Notes.Add(note);
             await _context.SaveChangesAsync();
 
-            var label = type == NoteType.Note ? "Note" : type == NoteType.Task ? "Task" : "Meeting";
-            TempData["SuccessMessage"] = $"{label} added successfully.";
+            TempData["SuccessMessage"] = isNewTodo ? "Task created successfully." : "Note added successfully.";
             return RedirectToAction("Details", "Contacts", new { id = contactId });
         }
 
         // POST: Notes/MarkCompleted/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> MarkCompleted(int id, string? returnUrl)
+        public async Task<IActionResult> MarkCompleted(int id, string? taskUpdate, string? returnUrl)
         {
             var note = await _context.Notes
                 .Include(n => n.Contact)
@@ -142,19 +113,21 @@ namespace CRMSystem.Controllers
                 return Forbid();
             }
 
-            if (note.Type == NoteType.Note)
+            if (!note.IsNewTodo)
             {
-                TempData["ErrorMessage"] = "Notes cannot be marked as completed.";
+                TempData["ErrorMessage"] = "Only tasks can be marked as completed.";
                 return RedirectToAction("Details", "Contacts", new { id = note.ContactId });
             }
 
-            note.IsCompleted = true;
-            note.CompletedAt = DateTime.UtcNow;
+            note.TaskStatusId = 2; // Completed
+            if (!string.IsNullOrEmpty(taskUpdate))
+            {
+                note.TaskUpdate = taskUpdate.Trim();
+            }
 
             await _context.SaveChangesAsync();
 
-            var label = note.Type == NoteType.Task ? "Task" : "Meeting";
-            TempData["SuccessMessage"] = $"{label} marked as completed.";
+            TempData["SuccessMessage"] = "Task marked as completed.";
 
             if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
             {
@@ -183,19 +156,17 @@ namespace CRMSystem.Controllers
                 return Forbid();
             }
 
-            if (note.Type == NoteType.Note)
+            if (!note.IsNewTodo)
             {
-                TempData["ErrorMessage"] = "Notes cannot be reopened.";
+                TempData["ErrorMessage"] = "Only tasks can be reopened.";
                 return RedirectToAction("Details", "Contacts", new { id = note.ContactId });
             }
 
-            note.IsCompleted = false;
-            note.CompletedAt = null;
+            note.TaskStatusId = 1; // Pending
 
             await _context.SaveChangesAsync();
 
-            var label = note.Type == NoteType.Task ? "Task" : "Meeting";
-            TempData["SuccessMessage"] = $"{label} reopened.";
+            TempData["SuccessMessage"] = "Task reopened.";
 
             if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
             {
@@ -239,6 +210,49 @@ namespace CRMSystem.Controllers
             return RedirectToAction("Details", "Contacts", new { id = contactId });
         }
 
+        // POST: Notes/UpdateTaskStatus
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateTaskStatus(int id, int taskStatusId, string? taskUpdate, string? returnUrl)
+        {
+            var note = await _context.Notes
+                .Include(n => n.Contact)
+                .FirstOrDefaultAsync(n => n.NoteId == id);
+
+            if (note == null)
+            {
+                return NotFound();
+            }
+
+            if (!await CanAccessNoteAsync(note))
+            {
+                return Forbid();
+            }
+
+            var statusExists = await _context.TaskStatuses.AnyAsync(ts => ts.Id == taskStatusId);
+            if (!statusExists)
+            {
+                return BadRequest("Invalid status.");
+            }
+
+            note.TaskStatusId = taskStatusId;
+            if (!string.IsNullOrEmpty(taskUpdate))
+            {
+                note.TaskUpdate = taskUpdate.Trim();
+            }
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Task status updated.";
+
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+
+            return RedirectToAction(nameof(Tasks));
+        }
+
         // =====================
         // Private Helper Methods
         // =====================
@@ -262,7 +276,7 @@ namespace CRMSystem.Controllers
                 return true;
             }
 
-            return contact.AssignedToId == GetCurrentUserId();
+            return contact.SalesRepId == GetCurrentUserId();
         }
 
         private async Task<bool> CanAccessNoteAsync(Note note)
@@ -273,7 +287,7 @@ namespace CRMSystem.Controllers
             }
 
             if (note.Contact == null) return false;
-            return note.Contact.AssignedToId == GetCurrentUserId();
+            return note.Contact.SalesRepId == GetCurrentUserId();
         }
 
         private async Task<bool> CanDeleteNoteAsync(Note note)
@@ -283,35 +297,61 @@ namespace CRMSystem.Controllers
                 return true;
             }
 
-            return note.AuthorId == GetCurrentUserId()
+            return note.SalesRepId == GetCurrentUserId()
                 && note.Contact != null
-                && note.Contact.AssignedToId == GetCurrentUserId();
+                && note.Contact.SalesRepId == GetCurrentUserId();
         }
 
-        private async Task<List<Note>> GetNotesByTypeAsync(NoteType type, bool completedFilter)
+        private async Task<List<Note>> GetTasksAsync(bool pendingOnly)
         {
             var query = _context.Notes
                 .AsNoTracking()
                 .Include(n => n.Contact)
-                .Include(n => n.Author)
-                .Where(n => n.Type == type && n.IsCompleted == completedFilter);
+                .Include(n => n.SalesRep)
+                .Include(n => n.TodoType)
+                .Include(n => n.TodoDesc)
+                .Include(n => n.TaskStatus)
+                .Where(n => n.IsNewTodo);
+
+            if (pendingOnly)
+            {
+                query = query.Where(n => n.TaskStatusId == 1); // Pending
+            }
+            else
+            {
+                query = query.Where(n => n.TaskStatusId == 2); // Completed
+            }
 
             if (!await IsManagerAsync())
             {
                 var userId = GetCurrentUserId();
-                query = query.Where(n => n.Contact!.AssignedToId == userId);
+                query = query.Where(n => n.Contact!.SalesRepId == userId);
             }
 
-            if (completedFilter)
-            {
-                query = query.OrderByDescending(n => n.CompletedAt);
-            }
-            else
-            {
-                query = query.OrderBy(n => n.DueDate);
-            }
+            return await query
+                .OrderBy(n => n.TodoDueDate)
+                .ToListAsync();
+        }
 
-            return await query.ToListAsync();
+        private async Task PopulateDropdownsAsync()
+        {
+            ViewBag.TodoTypes = new SelectList(
+                await _context.TodoTypes.OrderBy(tt => tt.Id).ToListAsync(),
+                "Id",
+                "Type"
+            );
+
+            ViewBag.TodoDescs = new SelectList(
+                await _context.TodoDescs.OrderBy(td => td.Id).ToListAsync(),
+                "Id",
+                "Description"
+            );
+
+            ViewBag.TaskStatuses = new SelectList(
+                await _context.TaskStatuses.OrderBy(ts => ts.Id).ToListAsync(),
+                "Id",
+                "Status"
+            );
         }
     }
 }

@@ -1,0 +1,178 @@
+@model List<CRMSystem.Controllers.SalesRepWithContacts>
+
+@{
+    ViewData["Title"] = "My Sales Reps";
+}
+
+<h1 class="mb-4">My Sales Reps</h1>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">
+        No sales representatives found.
+    </div>
+}
+else
+{
+    @foreach (var rep in Model)
+    {
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-person-badge"></i> @rep.FullName
+                    <small class="ms-2">(@rep.Email)</small>
+                    <span class="badge bg-light text-dark float-end">@rep.Contacts.Count contacts</span>
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                @if (rep.Contacts.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover mb-0">
+                            <thead class="table-info">
+                                <tr>
+                                    <th style="width: 30px;"></th>
+                                    <th>Contact_first</th>
+                                    <th>Contact_last</th>
+                                    <th>Company</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Website</th>
+                                    <th>Status</th>
+                                    <th>Date_of_Initial_contact</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var contact in rep.Contacts)
+                                {
+                                    var rowId = $"rep-{rep.UserId}-contact-{contact.ContactId}";
+                                    <tr data-bs-toggle="collapse" data-bs-target="#@rowId-notes" class="cursor-pointer">
+                                        <td class="text-center">
+                                            <i class="bi bi-dash-lg toggle-icon"></i>
+                                        </td>
+                                        <td>@contact.FirstName</td>
+                                        <td>@contact.LastName</td>
+                                        <td>@(contact.Company ?? "-")</td>
+                                        <td>@(contact.Phone ?? "-")</td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(contact.Email))
+                                            {
+                                                <a href="mailto:@contact.Email">@contact.Email</a>
+                                            }
+                                            else
+                                            {
+                                                <span>-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(contact.Website))
+                                            {
+                                                <a href="@contact.Website" target="_blank">@contact.Website</a>
+                                            }
+                                            else
+                                            {
+                                                <span>-</span>
+                                            }
+                                        </td>
+                                        <td>@contact.ContactStatus?.Name</td>
+                                        <td>@contact.DateOfInitialContact?.ToString("yyyy-MM-dd")</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="9" class="p-0">
+                                            <div class="collapse show" id="@rowId-notes">
+                                                @if (contact.Notes.Any())
+                                                {
+                                                    <div class="ms-4 me-4 my-2">
+                                                        <div class="card">
+                                                            <div class="card-header bg-warning text-dark py-1">
+                                                                <strong>notes</strong>
+                                                            </div>
+                                                            <div class="card-body p-0">
+                                                                <table class="table table-sm table-bordered mb-0">
+                                                                    <thead class="table-warning">
+                                                                        <tr>
+                                                                            <th>Date</th>
+                                                                            <th>Notes</th>
+                                                                            <th>Is_New_Todo</th>
+                                                                            <th>Todo_Type_ID</th>
+                                                                            <th>Todo_Desc_ID</th>
+                                                                            <th>Todo_Due_Date</th>
+                                                                            <th>Task_Status</th>
+                                                                            <th>Task_Update</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        @foreach (var note in contact.Notes)
+                                                                        {
+                                                                            <tr>
+                                                                                <td>@note.Date.ToString("yyyy-MM-dd")</td>
+                                                                                <td>@note.Content</td>
+                                                                                <td>@(note.IsNewTodo ? "Yes" : "No")</td>
+                                                                                <td>@(note.TodoType?.Type ?? "-")</td>
+                                                                                <td>@(note.TodoDesc?.Description ?? "-")</td>
+                                                                                <td>@(note.TodoDueDate?.ToString("MM/dd/yyyy h:mmtt") ?? "-")</td>
+                                                                                <td>@(note.TaskStatus?.Status ?? "-")</td>
+                                                                                <td>@(note.TaskUpdate ?? "-")</td>
+                                                                            </tr>
+                                                                        }
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="ms-4 me-4 my-2 text-muted">
+                                                        <em>No notes for this contact</em>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-3 text-muted">
+                        <em>No contacts assigned to this sales rep</em>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+}
+
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+    }
+    .cursor-pointer:hover {
+        background-color: #f8f9fa;
+    }
+    .toggle-icon {
+        transition: transform 0.2s;
+    }
+    tr[aria-expanded="false"] .toggle-icon {
+        transform: rotate(-90deg);
+    }
+</style>

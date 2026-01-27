@@ -1,5 +1,3 @@
-﻿@* File: Views/Contacts/Create.cshtml *@
-
 @model CRMSystem.Models.Contact
 
 @{
@@ -46,9 +44,9 @@
             </div>
 
             <div class="mb-3">
-                <label asp-for="Address" class="form-label"></label>
-                <textarea asp-for="Address" class="form-control" rows="3" placeholder="Enter address"></textarea>
-                <span asp-validation-for="Address" class="text-danger"></span>
+                <label asp-for="Website" class="form-label"></label>
+                <input asp-for="Website" class="form-control" type="url" placeholder="Enter website URL" />
+                <span asp-validation-for="Website" class="text-danger"></span>
             </div>
 
             <div class="mb-3">
@@ -60,11 +58,11 @@
             </div>
 
             <div class="mb-3">
-                <label asp-for="AssignedToId" class="form-label"></label>
-                <select asp-for="AssignedToId" asp-items="@(ViewBag.Users as SelectList)" class="form-select">
-                    <option value="">-- Select User --</option>
+                <label asp-for="SalesRepId" class="form-label">Sales Rep</label>
+                <select asp-for="SalesRepId" asp-items="@(ViewBag.Users as SelectList)" class="form-select">
+                    <option value="">-- Select Sales Rep --</option>
                 </select>
-                <span asp-validation-for="AssignedToId" class="text-danger"></span>
+                <span asp-validation-for="SalesRepId" class="text-danger"></span>
             </div>
 
             <div class="mt-4">
