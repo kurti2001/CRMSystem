@@ -91,8 +91,8 @@ else
                                 </td>
                                 <td>@contact.ContactStatus?.Name</td>
                                 <td>@contact.DateOfInitialContact?.ToString("yyyy-MM-dd")</td>
-                                <td class="text-center" onclick="event.stopPropagation();">
-                                    <a asp-action="Details" asp-route-id="@contact.ContactId" class="btn btn-sm btn-outline-primary" title="View Details & Add Notes">
+                                <td class="text-center">
+                                    <a asp-action="Details" asp-route-id="@contact.ContactId" class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-eye"></i> View
                                     </a>
                                 </td>
