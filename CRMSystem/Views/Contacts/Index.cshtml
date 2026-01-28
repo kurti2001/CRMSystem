@@ -61,8 +61,8 @@ else
                         @foreach (var contact in Model)
                         {
                             var rowId = $"contact-{contact.ContactId}";
-                            <tr data-bs-toggle="collapse" data-bs-target="#@rowId-notes" class="cursor-pointer">
-                                <td class="text-center">
+                            <tr>
+                                <td class="text-center cursor-pointer" data-bs-toggle="collapse" data-bs-target="#@rowId-notes">
                                     <i class="bi bi-dash-lg toggle-icon"></i>
                                 </td>
                                 <td>@contact.FirstName</td>
