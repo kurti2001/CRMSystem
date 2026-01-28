@@ -54,6 +54,7 @@ else
                             <th>Website</th>
                             <th>Status</th>
                             <th>Date_of_Initial_contact</th>
+                            <th class="text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -90,9 +91,14 @@ else
                                 </td>
                                 <td>@contact.ContactStatus?.Name</td>
                                 <td>@contact.DateOfInitialContact?.ToString("yyyy-MM-dd")</td>
+                                <td class="text-center" onclick="event.stopPropagation();">
+                                    <a asp-action="Details" asp-route-id="@contact.ContactId" class="btn btn-sm btn-outline-primary" title="View Details & Add Notes">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </td>
                             </tr>
                             <tr>
-                                <td colspan="9" class="p-0">
+                                <td colspan="10" class="p-0">
                                     <div class="collapse show" id="@rowId-notes">
                                         @if (contact.Notes.Any())
                                         {
